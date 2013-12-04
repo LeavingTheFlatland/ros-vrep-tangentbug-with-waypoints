@@ -81,12 +81,11 @@ Bug2Vrep::Bug2Vrep()
        	RangeFinderPC2_sub = nh_.subscribe<sensor_msgs::PointCloud2>("/vrep/RangeFinderDataPC2",10,&Bug2Vrep::RangeFinderPC2Callback,this); 
 	GoalPose_sub = nh_.subscribe<geometry_msgs::PoseStamped>("/vrep/GoalPose",10,&Bug2Vrep::GoalPoseCallback,this);
        	QuadPose_sub = nh_.subscribe<geometry_msgs::PoseStamped>("/vrep/QuadPose",10,&Bug2Vrep::QuadPoseCallback,this);
+	
 	Control_pub = nh_.advertise<std_msgs::String>("/vrep/QuadMotorControl",1);	
-	
-	
+		
 	QuadTargetPosition_pub = nh_.advertise<geometry_msgs::Point>("/vrep/QuadrotorWaypointControl",1);
 	
-
 	Motor1_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor1",1);
 	Motor2_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor2",1);
 	Motor3_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor3",1);
@@ -110,7 +109,7 @@ void Bug2Vrep::RangeFinderCallback(const std_msgs::String::ConstPtr& msg)
 }
 
 void Bug2Vrep::GoalPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
-{
+{	
         //Control_pub.publish(msgs);
 }
 
@@ -128,7 +127,7 @@ int main(int argc, char** argv)
 {
 	float m1, m2, m3, m4;
         ros::init(argc,argv, "Bug2Vrep");
-        Bug2Vrep Bug2Vrep;
+        Bug2Vrep bvrep;
 //      ros::spin();		//should be ros::spinOnce(), preceduto da un grosso while e da una state_machine
   
 	std_msgs::String MotorVelocities;
@@ -138,9 +137,9 @@ int main(int argc, char** argv)
 
 	geometry_msgs::Point TargetPosition;
 
-	TargetPosition.x = Bug2Vrep.QuadPos.x;
-	TargetPosition.y = Bug2Vrep.QuadPos.y;
-	TargetPosition.z = Bug2Vrep.QuadPos.z;
+	TargetPosition.x = bvrep.QuadPos.x;
+	TargetPosition.y = bvrep.QuadPos.y;
+	TargetPosition.z = bvrep.QuadPos.z;
 	
 	
 	m1 = m2 = m3 = m4 = 0.0;	
@@ -148,10 +147,9 @@ int main(int argc, char** argv)
 
 	while(ros::ok())
 	{	
-		
-		Bug2Vrep.QuadTargetPosition_pub.publish(TargetPosition);
-		TargetPosition.x += 0.1;
-		TargetPosition.y += 0.1;
+		TargetPosition.x = bvrep.QuadPos.x + 0.1;
+		TargetPosition.y = bvrep.QuadPos.y + 0.1;
+		bvrep.QuadTargetPosition_pub.publish(TargetPosition);
 	
 		ros::spinOnce();
 		usleep(5000000);
