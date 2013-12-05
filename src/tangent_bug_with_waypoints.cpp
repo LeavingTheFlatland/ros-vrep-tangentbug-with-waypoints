@@ -147,14 +147,14 @@ int main(int argc, char** argv)
 		TargetPosition.x = bvrep.QuadPos.x;
 		TargetPosition.y = bvrep.QuadPos.y;
 		TargetPosition.z = bvrep.QuadPos.z;
-	
 
 		ROS_INFO("[QuadPosition]: %f %f %f",bvrep.QuadPos.x,bvrep.QuadPos.y,bvrep.QuadPos.z);
 		
-		bvrep.QuadTargetPosition_pub.publish(TargetPosition);
 		TargetPosition.x += 0.1;
 		TargetPosition.y += 0.1;
-			
+		
+		bvrep.QuadTargetPosition_pub.publish(TargetPosition);
+		
 		usleep(5000000);
 	}
 	ros::shutdown();
