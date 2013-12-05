@@ -17,6 +17,7 @@
  */
 
 #include <ros/ros.h>
+
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/PointCloud.h>
 #include <std_msgs/Float32.h>
@@ -30,26 +31,32 @@
 #include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
+#include <math.h>
+#include <algorithm>
+
+
 
 enum BugState {BEHAV_1, BEHAV_2};
 
 class Bug2Vrep
 {
-        public:
-                Bug2Vrep();
+	public:
+		Bug2Vrep();
 		enum BugState state;
-	
-	ros::Publisher Control_pub;
 
-	ros::Publisher Motor1_pub;
-	ros::Publisher Motor2_pub;
-	ros::Publisher Motor3_pub;
-	ros::Publisher Motor4_pub;
+		ros::Publisher Control_pub;
 
-	ros::Publisher QuadTargetPosition_pub;
-	
-	pcl::PointCloud<pcl::PointXYZ> cloud;
-        geometry_msgs::Point QuadPos;	// GET Variable
+		ros::Publisher Motor1_pub;
+		ros::Publisher Motor2_pub;
+		ros::Publisher Motor3_pub;
+		ros::Publisher Motor4_pub;
+
+		ros::Publisher QuadTargetPosition_pub;
+
+		pcl::PointCloud<pcl::PointXYZ> cloud;
+		geometry_msgs::Point QuadPos;	// GET Variable
+		geometry_msgs::Point GoalPos;
+		geometry_msgs::Point ComputeMotionToGoal(void);
 
 
 	private:
@@ -58,7 +65,7 @@ class Bug2Vrep
                 void RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 		void GoalPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
                 void QuadPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
-		
+	
 		ros::NodeHandle nh_;
                 
 		ros::Subscriber RangeFinder_sub;	// RangeFinder msgs from the robot
@@ -70,9 +77,6 @@ class Bug2Vrep
 		sensor_msgs::PointCloud2 RangeData;	// GET Variable
 		geometry_msgs::PoseStamped GoalPose;	// GET Variable
 		geometry_msgs::Point TargetPos; 	// SET Variable
-		
-		
-
 };
 
 Bug2Vrep::Bug2Vrep()
@@ -82,9 +86,7 @@ Bug2Vrep::Bug2Vrep()
 	GoalPose_sub = nh_.subscribe<geometry_msgs::PoseStamped>("/vrep/GoalPose",10,&Bug2Vrep::GoalPoseCallback,this);
        	QuadPose_sub = nh_.subscribe<geometry_msgs::PoseStamped>("/vrep/QuadPose",10,&Bug2Vrep::QuadPoseCallback,this);
 	Control_pub = nh_.advertise<std_msgs::String>("/vrep/QuadMotorControl",1);	
-	
 
-	
 	Control_pub = nh_.advertise<std_msgs::String>("/vrep/QuadMotorControl",1);	
 		
 	QuadTargetPosition_pub = nh_.advertise<geometry_msgs::Point>("/vrep/QuadrotorWaypointControl",1);
@@ -113,7 +115,9 @@ void Bug2Vrep::RangeFinderCallback(const std_msgs::String::ConstPtr& msg)
 
 void Bug2Vrep::GoalPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {	
-        //Control_pub.publish(msgs);
+        GoalPos.x = msg->pose.position.x;
+	GoalPos.y = msg->pose.position.y;
+	GoalPos.z = msg->pose.position.z;
 }
 
 void Bug2Vrep::QuadPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
@@ -123,22 +127,25 @@ void Bug2Vrep::QuadPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 	QuadPos.z = msg->pose.position.z;       
 }
 
+geometry_msgs::Point Bug2Vrep::ComputeMotionToGoal(void)
+{
+	float theta;
+	geometry_msgs::Point delta;
+
+	theta = atan2((GoalPos.y - QuadPos.y),(GoalPos.x - QuadPos.x));
+	delta.x = 0.2*(cos(theta));
+	delta.y = 0.2*(sin(theta));
+	return delta;	
+}
+
 int main(int argc, char** argv)
 {
 	float m1, m2, m3, m4;
         ros::init(argc,argv, "Bug2Vrep");
         Bug2Vrep bvrep;
-//      ros::spin();		//should be ros::spinOnce(), preceduto da un grosso while e da una state_machine
   
-	std_msgs::String MotorVelocities;
-	std_msgs::Float32 fm1,fm2,fm3,fm4;
-	std::stringstream ss;
-	std::string s1,s2,s3,s4;
-
 	geometry_msgs::Point TargetPosition;
-
-		m1 = m2 = m3 = m4 = 0.0;	
-	
+	geometry_msgs::Point Delta;
 	
 	while(ros::ok())
 	{	
@@ -150,15 +157,21 @@ int main(int argc, char** argv)
 
 		ROS_INFO("[QuadPosition]: %f %f %f",bvrep.QuadPos.x,bvrep.QuadPos.y,bvrep.QuadPos.z);
 		
-		TargetPosition.x += 0.1;
-		TargetPosition.y += 0.1;
+		Delta = bvrep.ComputeMotionToGoal();		
 		
-		bvrep.QuadTargetPosition_pub.publish(TargetPosition);
+		//--- Navigation algorithm HERE
+		TargetPosition.x += Delta.x;
+		TargetPosition.y += Delta.y;
+		
+
+
+		//--- END Navigation algorithm
+		bvrep.QuadTargetPosition_pub.publish(TargetPosition);		// Send the control signal
 		
 		usleep(5000000);
 	}
 	ros::shutdown();
-	printf("Bug Algorithm ended!");
+	printf("TangentBug Algorithm ended!");
 
 	return(0);
 }
