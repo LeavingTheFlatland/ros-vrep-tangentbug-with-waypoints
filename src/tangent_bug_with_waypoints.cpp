@@ -69,7 +69,7 @@ class Bug2Vrep
 				
 		sensor_msgs::PointCloud2 RangeData;	// GET Variable
 		geometry_msgs::PoseStamped GoalPose;	// GET Variable
-				geometry_msgs::Point TargetPos; 	// SET Variable
+		geometry_msgs::Point TargetPos; 	// SET Variable
 		
 		
 
@@ -83,7 +83,7 @@ Bug2Vrep::Bug2Vrep()
        	QuadPose_sub = nh_.subscribe<geometry_msgs::PoseStamped>("/vrep/QuadPose",10,&Bug2Vrep::QuadPoseCallback,this);
 	Control_pub = nh_.advertise<std_msgs::String>("/vrep/QuadMotorControl",1);	
 	
-	
+
 	QuadTargetPosition_pub = nh_.advertise<geometry_msgs::Point>("/vrep/QuadrotorWaypointControl",1);
 	
 
@@ -121,9 +121,6 @@ void Bug2Vrep::QuadPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 	QuadPos.z = msg->pose.position.z;       
 }
 
-
-
-
 int main(int argc, char** argv)
 {
 	float m1, m2, m3, m4;
@@ -138,22 +135,25 @@ int main(int argc, char** argv)
 
 	geometry_msgs::Point TargetPosition;
 
-	TargetPosition.x = Bug2Vrep.QuadPos.x;
-	TargetPosition.y = Bug2Vrep.QuadPos.y;
-	TargetPosition.z = Bug2Vrep.QuadPos.z;
+		m1 = m2 = m3 = m4 = 0.0;	
 	
-	
-	m1 = m2 = m3 = m4 = 0.0;	
-	
-
 	while(ros::ok())
 	{	
+		ros::spinOnce();
+		
+		TargetPosition.x = Bug2Vrep.QuadPos.x;
+		TargetPosition.y = Bug2Vrep.QuadPos.y;
+		TargetPosition.z = Bug2Vrep.QuadPos.z;
+	
+
+		ROS_INFO("[QuadPosition]: %f %f %f",Bug2Vrep.QuadPos.x,Bug2Vrep.QuadPos.y,Bug2Vrep.QuadPos.z);
+		if((Bug2Vrep.QuadPos.x == 0.0)&&(Bug2Vrep.QuadPos.y==0.0))	//Workaround
+			ros::spinOnce();
 		
 		Bug2Vrep.QuadTargetPosition_pub.publish(TargetPosition);
 		TargetPosition.x += 0.1;
 		TargetPosition.y += 0.1;
-	
-		ros::spinOnce();
+			
 		usleep(5000000);
 	}
 	ros::shutdown();
