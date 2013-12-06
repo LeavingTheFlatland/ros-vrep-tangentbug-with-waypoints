@@ -33,8 +33,11 @@
 
 #include <math.h>
 #include <algorithm>
+#include <vector>
+#include <iostream>
+#include <iterator>
 
-
+using namespace std;
 
 enum BugState {BEHAV_1, BEHAV_2};
 
@@ -57,6 +60,7 @@ class Bug2Vrep
 		geometry_msgs::Point QuadPos;	// GET Variable
 		geometry_msgs::Point GoalPos;
 		geometry_msgs::Point ComputeMotionToGoal(void);
+		geometry_msgs::Point MinimumDistanceToGoal(void);
 
 
 	private:
@@ -65,7 +69,8 @@ class Bug2Vrep
                 void RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 		void GoalPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
                 void QuadPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
-	
+		float ComputeDistance(geometry_msgs::Point x,geometry_msgs::Point y);
+				
 		ros::NodeHandle nh_;
                 
 		ros::Subscriber RangeFinder_sub;	// RangeFinder msgs from the robot
@@ -137,6 +142,30 @@ geometry_msgs::Point Bug2Vrep::ComputeMotionToGoal(void)
 	delta.y = 0.2*(sin(theta));
 	return delta;	
 }
+
+float Bug2Vrep::ComputeDistance(geometry_msgs::Point a, geometry_msgs::Point b)
+{
+	return sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y));
+}
+
+geometry_msgs::Point Bug2Vrep::MinimumDistanceToGoal(void)
+{
+	int n = cloud.points.size();
+	vector<float> distances(n);
+	geometry_msgs::Point pnt[n];
+
+	for(int i=0;i<n; ++i)
+	{
+		pnt[i].x = cloud.points[i].x;
+		pnt[i].y = cloud.points[i].y;
+		distances[i] = Bug2Vrep::ComputeDistance(QuadPos,pnt[i]) + Bug2Vrep::ComputeDistance(pnt[i],GoalPos);
+	}
+	
+//	return pnt[*std::min_element(distances,distances+n)];
+	int min_pos = distance(distances.begin(),min_element(distances.begin(), distances.end()));
+	return pnt[min_pos];
+}
+
 
 int main(int argc, char** argv)
 {
