@@ -60,6 +60,7 @@ class Bug2Vrep
 		geometry_msgs::Point QuadPos;	// GET Variable
 		geometry_msgs::Point GoalPos;
 		geometry_msgs::Point ComputeMotionToGoal(void);
+		geometry_msgs::Point ComputeMotionToPoint(void);
 		geometry_msgs::Point MinimumDistanceToGoal(void);
 
 
@@ -106,10 +107,10 @@ void Bug2Vrep::RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& 
 {
 	//pcl::PointCloud<pcl::PointXYZ> cloud;
 	pcl::fromROSMsg (*msg, cloud);
-	for(int i=0;i<cloud.points.size(); ++i)
-	{
-		ROS_INFO("Point: %f %f %f", cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
-	}
+//	for(int i=0;i<cloud.points.size(); ++i)
+//	{
+		//ROS_INFO("Point: %f %f %f", cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
+//	}
 }
 
 
@@ -159,13 +160,27 @@ geometry_msgs::Point Bug2Vrep::MinimumDistanceToGoal(void)
 		pnt[i].x = cloud.points[i].x;
 		pnt[i].y = cloud.points[i].y;
 		distances[i] = Bug2Vrep::ComputeDistance(QuadPos,pnt[i]) + Bug2Vrep::ComputeDistance(pnt[i],GoalPos);
+	//	ROS_INFO("%dth obstacle point distance to Goal: %f",i,distances[i]);
 	}
 	
 //	return pnt[*std::min_element(distances,distances+n)];
 	int min_pos = distance(distances.begin(),min_element(distances.begin(), distances.end()));
+	ROS_INFO("Minimum distance point is the %dth, (%f,%f)",min_pos,pnt[min_pos].x,pnt[min_pos].y);
 	return pnt[min_pos];
 }
 
+geometry_msgs::Point Bug2Vrep::ComputeMotionToPoint(void)
+{
+	float theta;
+	geometry_msgs::Point delta, min_point;
+
+	min_point = Bug2Vrep::MinimumDistanceToGoal();
+	
+	theta = atan2((min_point.y - QuadPos.y),(min_point.x - QuadPos.x));
+	delta.x = 0.5*(cos(theta));
+	delta.y = 0.5*(sin(theta));
+	return delta;	
+}
 
 int main(int argc, char** argv)
 {
@@ -184,15 +199,27 @@ int main(int argc, char** argv)
 		TargetPosition.y = bvrep.QuadPos.y;
 		TargetPosition.z = bvrep.QuadPos.z;
 
-		ROS_INFO("[QuadPosition]: %f %f %f",bvrep.QuadPos.x,bvrep.QuadPos.y,bvrep.QuadPos.z);
-		
-		Delta = bvrep.ComputeMotionToGoal();		
-		
-		//--- Navigation algorithm HERE
-		TargetPosition.x += Delta.x;
-		TargetPosition.y += Delta.y;
-		
+	//	ROS_INFO("[QuadPosition]: %f %f %f",bvrep.QuadPos.x,bvrep.QuadPos.y,bvrep.QuadPos.z);
+	
 
+		//-- Navigation algorithm
+		if(!bvrep.cloud.size())
+		{	
+			ROS_INFO("MOTION TO GOAL");
+			Delta = bvrep.ComputeMotionToGoal();		
+		
+			TargetPosition.x += Delta.x;
+			TargetPosition.y += Delta.y;
+		}
+		else
+		{
+			ROS_INFO("OBSTACLE DETECTED");
+			Delta = bvrep.ComputeMotionToPoint();		
+		
+			TargetPosition.x += Delta.x;
+			TargetPosition.y += Delta.y;
+
+		}
 
 		//--- END Navigation algorithm
 		bvrep.QuadTargetPosition_pub.publish(TargetPosition);		// Send the control signal
