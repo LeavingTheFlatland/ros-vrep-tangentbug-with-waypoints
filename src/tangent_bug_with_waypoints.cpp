@@ -36,10 +36,14 @@
 #include <vector>
 #include <iostream>
 #include <iterator>
+#include <list>
+
+
 
 #define LASER_SCANNER_MAX_RANGE 1.5
 #define SCAN_ANGLE 240
 #define FRONT_SCAN 343
+#define Dwindow	10
 
 using namespace std;
 
@@ -62,9 +66,9 @@ class Bug2Vrep
 		geometry_msgs::Point QuadPos;	// GET Variable
 		geometry_msgs::Point GoalPos;
 		geometry_msgs::Point ComputeMotionToGoal(void);
-		geometry_msgs::Point ComputeMotionToPoint(void);
-		geometry_msgs::Point MinimumDistanceToGoal(void);
-
+		geometry_msgs::Point MinimumDistanceToGoal(list<geometry_msgs::Point>);
+		geometry_msgs::Point ComputeMotionToTangentPoint(void);
+		
 		float front_distance;
 		bool obstacle_sensed;
 
@@ -120,11 +124,11 @@ void Bug2Vrep::RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& 
 	
 	for(int i=0;i<cloud.points.size(); ++i)
 	{
-		ROS_INFO("Point[%d]: %f %f %f", i,cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
+	//	ROS_INFO("Point[%d]: %f %f %f", i,cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
 
 		if(obstacle_sensed==0 && ((cloud.points[i].x != 0.0) || (cloud.points[i].y != 0.0)))
 			obstacle_sensed = 1;
-			ROS_INFO("Obstacle_sensed: %d",obstacle_sensed);
+		//	ROS_INFO("Obstacle_sensed: %d",obstacle_sensed);
 	}
 
 	front_pnt.x = cloud.points[FRONT_SCAN].x;
@@ -132,13 +136,13 @@ void Bug2Vrep::RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& 
 	me.x = 0.0;
 	me.y = 0.0;
 	front_distance = Bug2Vrep::ComputeDistance(me,front_pnt);
-	ROS_INFO("Front_distance = %f",front_distance);
+	//ROS_INFO("Front_distance = %f",front_distance);
 	front_pnt.x = cloud.points[10].x;
 	front_pnt.y = cloud.points[10].y;
 	me.x = 0.0;
 	me.y = 0.0;
 	front_distance = Bug2Vrep::ComputeDistance(me,front_pnt);
-	ROS_INFO("Max = %f",front_distance);
+	//ROS_INFO("Max = %f",front_distance);
 
 
 
@@ -180,42 +184,68 @@ float Bug2Vrep::ComputeDistance(geometry_msgs::Point a, geometry_msgs::Point b)
 	return sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y));
 }
 
-geometry_msgs::Point Bug2Vrep::MinimumDistanceToGoal(void)
+geometry_msgs::Point Bug2Vrep::MinimumDistanceToGoal(list<geometry_msgs::Point> tangent_points)
 {
-	int n = cloud.points.size();
+	int n = tangent_points.size();
 	vector<float> distances(n);
-	geometry_msgs::Point pnt[n], me;
+	geometry_msgs::Point temp_pnt[n],me;
+	
 	float front_distance;
 	me.x = 0.0;
 	me.y = 0.0;
 
-	for(int i=0;i<n; ++i)
+	for(int i=0;i<n;i++)
 	{
-		pnt[i].x = cloud.points[i].x;
-		pnt[i].y = cloud.points[i].y;
-		distances[i] = Bug2Vrep::ComputeDistance(QuadPos,pnt[i]) + Bug2Vrep::ComputeDistance(pnt[i],GoalPos);
-		front_distance = Bug2Vrep::ComputeDistance(me,pnt[FRONT_SCAN]);
+		temp_pnt[i] = tangent_points.front();
+		distances[i] = Bug2Vrep::ComputeDistance(QuadPos,temp_pnt[i]) + Bug2Vrep::ComputeDistance(temp_pnt[i],GoalPos);
+	//	front_distance = Bug2Vrep::ComputeDistance(me,pnt[FRONT_SCAN]);
 	//	ROS_INFO("%dth obstacle point distance to Goal: %f",i,distances[i]);
-		ROS_INFO("Front Distance: %f", front_distance);
+	//	ROS_INFO("Front Distance: %f", front_distance);
 	}
 	
 //	return pnt[*std::min_element(distances,distances+n)];
 	int min_pos = distance(distances.begin(),min_element(distances.begin(), distances.end()));
-	ROS_INFO("Minimum distance point is the %dth, (%f,%f)",min_pos,pnt[min_pos].x,pnt[min_pos].y);
-	return pnt[min_pos];
+	return temp_pnt[min_pos];
 }
 
-geometry_msgs::Point Bug2Vrep::ComputeMotionToPoint(void)
+geometry_msgs::Point Bug2Vrep::ComputeMotionToTangentPoint(void)
 {
 	float theta;
-	geometry_msgs::Point delta, min_point;
+	geometry_msgs::Point delta, min_tan_point;
+	list<geometry_msgs::Point> tangent_points;
 
-	min_point = Bug2Vrep::MinimumDistanceToGoal();
-	
-	theta = atan2((min_point.y - QuadPos.y),(min_point.x - QuadPos.x));
+	for(int i=0;i<(cloud.points.size()-Dwindow);++i)
+	{
+		geometry_msgs::Point temp;
+		if(((cloud.points[i].x != 0)&&(cloud.points[i].y != 0))&&(cloud.points[i+Dwindow].x == 0)&&(cloud.points[i+Dwindow].y == 0))
+		{
+			temp.x = cloud.points[i].x;
+			temp.y = cloud.points[i].y;
+			if((temp.x != 0.0)&&(temp.y!=0.0))
+			{
+				tangent_points.push_back(temp);
+				ROS_INFO("TangentPoint detected: (%f,%f)",temp.x,temp.y);
+			}
+		}
+		if(((cloud.points[i].x == 0)&&(cloud.points[i].y == 0))&&(cloud.points[i+Dwindow].x != 0)&&(cloud.points[i+Dwindow].y != 0))
+		{
+			temp.x = cloud.points[i].x;
+			temp.y = cloud.points[i].y;
+			if((temp.x != 0.0)&&(temp.y!=0.0))
+			{
+				tangent_points.push_back(temp);
+				ROS_INFO("TangentPoint detected: (%f,%f)",temp.x,temp.y);
+			}
+		}
+	}
+		
+	min_tan_point = Bug2Vrep::MinimumDistanceToGoal(tangent_points);
+
+	ROS_INFO("(%f,%f)",min_tan_point.x,min_tan_point.y);	
+	theta = atan2((min_tan_point.y - QuadPos.y),(min_tan_point.x - QuadPos.x));
 	delta.x = 0.5*(cos(theta));
 	delta.y = 0.5*(sin(theta));
-	return delta;	
+	return min_tan_point;	
 }
 
 
@@ -242,7 +272,7 @@ int main(int argc, char** argv)
 	
 
 		//-- Navigation algorithm
-		if(1)
+		if(!bvrep.obstacle_sensed)
 		{	
 			ROS_INFO("MOTION TO GOAL");
 			Delta = bvrep.ComputeMotionToGoal();		
@@ -253,7 +283,7 @@ int main(int argc, char** argv)
 		else
 		{
 			ROS_INFO("OBSTACLE DETECTED");
-			Delta = bvrep.ComputeMotionToPoint();		
+			Delta = bvrep.ComputeMotionToTangentPoint();		
 		
 			TargetPosition.x += Delta.x;
 			TargetPosition.y += Delta.y;
