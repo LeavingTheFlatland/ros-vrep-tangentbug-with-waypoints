@@ -37,15 +37,17 @@
 #include <iostream>
 #include <iterator>
 
+#define LASER_SCANNER_MAX_RANGE 1.5
+#define SCAN_ANGLE 240
+#define FRONT_SCAN 343
+
 using namespace std;
 
-enum BugState {BEHAV_1, BEHAV_2};
 
 class Bug2Vrep
 {
 	public:
 		Bug2Vrep();
-		enum BugState state;
 
 		ros::Publisher Control_pub;
 
@@ -63,6 +65,8 @@ class Bug2Vrep
 		geometry_msgs::Point ComputeMotionToPoint(void);
 		geometry_msgs::Point MinimumDistanceToGoal(void);
 
+		float front_distance;
+		bool obstacle_sensed;
 
 	private:
 		// Callbacks
@@ -101,16 +105,43 @@ Bug2Vrep::Bug2Vrep()
 	Motor2_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor2",1);
 	Motor3_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor3",1);
 	Motor4_pub = nh_.advertise<std_msgs::Float32>("/vrep/Motor4",1);
+
+	obstacle_sensed = 0;
+
 }
 
 void Bug2Vrep::RangeFinderPC2Callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
 	//pcl::PointCloud<pcl::PointXYZ> cloud;
 	pcl::fromROSMsg (*msg, cloud);
-//	for(int i=0;i<cloud.points.size(); ++i)
-//	{
-		//ROS_INFO("Point: %f %f %f", cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
-//	}
+	geometry_msgs::Point front_pnt, me;
+	
+	obstacle_sensed = 0;
+	
+	for(int i=0;i<cloud.points.size(); ++i)
+	{
+		ROS_INFO("Point[%d]: %f %f %f", i,cloud.points[i].x,cloud.points[i].y,cloud.points[i].z);
+
+		if(obstacle_sensed==0 && ((cloud.points[i].x != 0.0) || (cloud.points[i].y != 0.0)))
+			obstacle_sensed = 1;
+			ROS_INFO("Obstacle_sensed: %d",obstacle_sensed);
+	}
+
+	front_pnt.x = cloud.points[FRONT_SCAN].x;
+	front_pnt.y = cloud.points[FRONT_SCAN].y;
+	me.x = 0.0;
+	me.y = 0.0;
+	front_distance = Bug2Vrep::ComputeDistance(me,front_pnt);
+	ROS_INFO("Front_distance = %f",front_distance);
+	front_pnt.x = cloud.points[10].x;
+	front_pnt.y = cloud.points[10].y;
+	me.x = 0.0;
+	me.y = 0.0;
+	front_distance = Bug2Vrep::ComputeDistance(me,front_pnt);
+	ROS_INFO("Max = %f",front_distance);
+
+
+
 }
 
 
@@ -153,14 +184,19 @@ geometry_msgs::Point Bug2Vrep::MinimumDistanceToGoal(void)
 {
 	int n = cloud.points.size();
 	vector<float> distances(n);
-	geometry_msgs::Point pnt[n];
+	geometry_msgs::Point pnt[n], me;
+	float front_distance;
+	me.x = 0.0;
+	me.y = 0.0;
 
 	for(int i=0;i<n; ++i)
 	{
 		pnt[i].x = cloud.points[i].x;
 		pnt[i].y = cloud.points[i].y;
 		distances[i] = Bug2Vrep::ComputeDistance(QuadPos,pnt[i]) + Bug2Vrep::ComputeDistance(pnt[i],GoalPos);
+		front_distance = Bug2Vrep::ComputeDistance(me,pnt[FRONT_SCAN]);
 	//	ROS_INFO("%dth obstacle point distance to Goal: %f",i,distances[i]);
+		ROS_INFO("Front Distance: %f", front_distance);
 	}
 	
 //	return pnt[*std::min_element(distances,distances+n)];
@@ -181,6 +217,9 @@ geometry_msgs::Point Bug2Vrep::ComputeMotionToPoint(void)
 	delta.y = 0.5*(sin(theta));
 	return delta;	
 }
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -203,7 +242,7 @@ int main(int argc, char** argv)
 	
 
 		//-- Navigation algorithm
-		if(!bvrep.cloud.size())
+		if(1)
 		{	
 			ROS_INFO("MOTION TO GOAL");
 			Delta = bvrep.ComputeMotionToGoal();		
